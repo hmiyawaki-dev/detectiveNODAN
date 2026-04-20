@@ -6,7 +6,32 @@
     <title>Noda謎解きクエスト</title>
     <style>
         :root { --primary-color: #e60012; --bg-color: #f4f4f4; --success-color: #28a745; }
-        body { font-family: sans-serif; text-align: center; background-color: var(--bg-color); margin: 0; padding: 20px; color: #333; }
+      body {
+    font-family: sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 20px;
+    color: #333;
+    
+    /* --- 背景イラストの設定 --- */
+    background-image: url('haikei.jpg'); /* 背景用の画像ファイル名 */
+    background-size: cover;               /* 画面全体を覆う */
+    background-position: center;          /* 中央合わせ */
+    background-attachment: fixed;         /* スクロールしても背景を動かさない（高級感が出ます） */
+    background-repeat: no-repeat;
+}
+
+/* 背景が濃い場合に備えて、各セクションを少し透けた白背景にする */
+.prize-section, .quiz-card {
+    background: rgba(255, 255, 255, 0.9) !important; /* 透明度90%の白 */
+    backdrop-filter: blur(5px);                      /* 背景を少しぼかす（モダンなデザイン） */
+}
+
+/* スタンプ台も背景から浮き出るように調整 */
+.grid-container {
+    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+}
         
         /* スタンプ台のデザイン */
         .grid-container {
@@ -83,11 +108,27 @@
         }
         .quiz-card { background: white; color: black; width: 85%; margin: auto; padding: 20px; border-radius: 15px; }
         .ans-btn { width: 100%; display: block; background: var(--primary-color); color: white; padding: 12px; margin: 10px 0; border: none; border-radius: 8px; font-size: 16px; }
+
+        /* ロゴ表示エリアのスタイル */
+.logo-container {
+    max-width: 450px; /* ロゴの最大横幅 */
+    margin: 5px auto 10px;
+    padding: 0 10px;
+}
+
+.logo-container img {
+    width: 100%;      /* 画面幅に合わせて伸縮 */
+    height: auto;     /* 比率を維持 */
+    display: block;
+    margin: 0 auto;
+}
     </style>
 </head>
 <body>
 
-    <h1>Nodaクエスト</h1>
+    <div class="logo-container">
+    <img src="NODAN.png" alt="Nodan　ロゴ">
+　　</div>
     
     <div class="grid-container" id="stamp-grid"></div>
 
@@ -131,7 +172,7 @@
     const prizeSettings = [
         { id: 'prize4', count: 4, name: "クリアファイル" },
         { id: 'prize5', count: 5, name: "付箋（ふせん）" },
-        { id: 'prize6', count: 6, name: "脇阪プロマイド" }
+        { id: 'prize6', count: 6, name: "シャープペンシル" }
     ];
 
     const positions = ["0% 0%", "100% 0%", "0% 50%", "100% 50%", "0% 100%", "100% 100%"];
