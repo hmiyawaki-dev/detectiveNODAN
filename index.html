@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nodaクエスト - スタンプラリー</title>
+    <style>
+        :root { --primary-color: #e60012; --bg-color: #f4f4f4; --success-color: #28a745; }
+        body { font-family: sans-serif; text-align: center; background-color: var(--bg-color); margin: 0; padding: 20px; color: #333; }
+        
+        /* スタンプ台のデザイン */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 0;
+            max-width: 300px;
+            aspect-ratio: 2 / 3;
+            margin: 20px auto;
+            border: 5px solid #333;
+            background: #eee;
+            overflow: hidden;
+        }
+
+        .stamp-slot {
+            background-color: #ccc;
+            border: 0.5px solid #bbb;
+            box-sizing: border-box;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #888;
+            background-size: 300px 450px;
+        }
+
+        .stamp-slot.cleared {
+            background-color: transparent;
+            background-image: url('character.png'); /* 画像ファイル名 */
+            color: transparent;
+            border: none;
+        }
+
+        /* 景品リストエリア */
+        .prize-section {
+            max-width: 340px;
+            margin: 30px auto;
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: left;
+        }
+        .prize-section h2 { font-size: 18px; border-bottom: 2px solid var(--primary-color); padding-bottom: 5px; margin-top: 0; }
+        
+        .prize-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid #eee;
+        }
+        .prize-item:last-child { border-bottom: none; }
+        
+        .prize-info { flex-grow: 1; }
+        .prize-name { font-weight: bold; font-size: 15px; display: block; }
+        .prize-requirement { font-size: 12px; color: #666; }
+
+        .exchange-btn {
+            padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold;
+            font-size: 13px; cursor: pointer; white-space: nowrap;
+        }
+        .btn-locked { background-color: #ccc; color: #fff; cursor: not-allowed; }
+        .btn-ready { background-color: var(--primary-color); color: #fff; }
+        .btn-done { background-color: #666; color: #fff; cursor: default; }
+
+        /* リセットボタンのスタイル */
+        .admin-section { display: none;　margin-top: 50px; padding-bottom: 30px; }
+        .reset-link { font-size: 12px; color: #999; text-decoration: underline; background: none; border: none; cursor: pointer; }
+
+        /* クイズ用モーダル */
+        #quiz-overlay {
+            display: none; position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.85); color: white; padding-top: 50px; z-index: 1000;
+        }
+        .quiz-card { background: white; color: black; width: 85%; margin: auto; padding: 20px; border-radius: 15px; }
+        .ans-btn { width: 100%; display: block; background: var(--primary-color); color: white; padding: 12px; margin: 10px 0; border: none; border-radius: 8px; font-size: 16px; }
+    </style>
+</head>
+<body>
+
+    <h1>Nodaクエスト</h1>
+    
+    <div class="grid-container" id="stamp-grid"></div>
+
+    <div class="prize-section">
+        <h2>🎁 景品一覧</h2>
+        <div id="prize-list"></div>
+    </div>
+
+    <div class="admin-section">
+        <button class="reset-link" onclick="manualReset()">データをリセットして最初から遊ぶ</button>
+    </div>
+
+    <div id="quiz-overlay">
+        <div class="quiz-card" id="quiz-content"></div>
+    </div>
+
+<script>
+    // --- 1. 自動リセットロジック (方法2) ---
+    const RESET_INTERVAL = 3 * 24 * 60 * 60 * 1000; // 3日間（ミリ秒）
+    const now = Date.now();
+    const lastAccess = localStorage.getItem('noda_last_access');
+
+    if (lastAccess && (now - parseInt(lastAccess) > RESET_INTERVAL)) {
+        localStorage.removeItem('noda_stamps');
+        localStorage.removeItem('noda_prizes');
+        alert("前回のイベントから時間が経過したため、データをリセットしました。");
+    }
+    localStorage.setItem('noda_last_access', now.toString());
+
+
+    // --- 2. データ定義 ---
+    const quizData = {
+        1: { q: "神戸野田高校は令和８年で創立何周年？", opts: ["A 50年", "B 90年", "C 100年"], ans: "C" },
+        2: { q: "ルーヴル美術館がある国はどこでしょう？", opts: ["A アメリカ", "B フランス", "C イタリア"], ans: "B" },
+        3: { q: "JR鷹取駅には100年間、何がありましたか？", opts: ["A 駅員宿舎", "B 荷物倉庫", "C 鉄道車両倉庫"], ans: "C" },
+        4: { q: "華道部の展示にある、校内に咲いた花は？", opts: ["A 紫陽花（あじさい）", "B チューリップ", "C スイートピー"], ans: "A" },
+        5: { q: "将棋の駒の形は、何角形？", opts: ["A 四角形", "B 五角形", "C 六角形"], ans: "B" },
+        6: { q: "コーラス部の演奏に参加しましたか？", opts: ["参加した！"], ans: "参加した！" }
+    };
+
+    const prizeSettings = [
+        { id: 'prize4', count: 4, name: "クリアファイル" },
+        { id: 'prize5', count: 5, name: "付箋（ふせん）" },
+        { id: 'prize6', count: 6, name: "シャープペンシル" }
+    ];
+
+    const positions = ["0% 0%", "100% 0%", "0% 50%", "100% 50%", "0% 100%", "100% 100%"];
+
+    let progress = JSON.parse(localStorage.getItem('noda_stamps')) || {};
+    let exchangedPrizes = JSON.parse(localStorage.getItem('noda_prizes')) || {};
+
+    // --- 3. 描画・操作関数 ---
+
+// --- 3. 描画・操作関数（管理者用取り消し機能付き） ---
+
+function renderGrid() {
+    const grid = document.getElementById('stamp-grid');
+    grid.innerHTML = '';
+    const isAdmin = (urlParams.get('admin') === 'true');
+
+    for (let i = 1; i <= 6; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'stamp-slot' + (progress[i] ? ' cleared' : '');
+        slot.style.backgroundPosition = positions[i-1];
+        slot.innerText = i;
+
+        // 管理者モードなら、獲得済みスタンプを個別にリセットできる機能
+        if (isAdmin && progress[i]) {
+            slot.style.cursor = 'pointer';
+            slot.title = "このスタンプを取り消す";
+            slot.onclick = () => {
+                if(confirm(`スタンプ ${i} を未獲得に戻しますか？`)) {
+                    delete progress[i];
+                    localStorage.setItem('noda_stamps', JSON.stringify(progress));
+                    renderGrid();
+                    renderPrizes();
+                }
+            };
+        }
+        grid.appendChild(slot);
+    }
+}
+
+function renderPrizes() {
+    const listEl = document.getElementById('prize-list');
+    const currentCount = Object.keys(progress).length;
+    const isAdmin = (urlParams.get('admin') === 'true');
+    listEl.innerHTML = '';
+
+    prizeSettings.forEach(prize => {
+        const isExchanged = exchangedPrizes[prize.id];
+        const isReady = currentCount >= prize.count;
+
+        let btnHtml = '';
+        if (isExchanged) {
+            // 交換済みの場合
+            btnHtml = `<button class="exchange-btn btn-done" disabled>交換済み</button>`;
+            // ★管理者モードなら「取り消し」ボタンを追加表示
+            if (isAdmin) {
+                btnHtml += `<button class="reset-link" style="margin-left:10px" onclick="undoPrize('${prize.id}', '${prize.name}')">【取消】</button>`;
+            }
+        } else if (isReady) {
+            btnHtml = `<button class="exchange-btn btn-ready" onclick="claimPrize('${prize.id}', '${prize.name}')">交換する</button>`;
+        } else {
+            btnHtml = `<button class="exchange-btn btn-locked" disabled>あと ${prize.count - currentCount} つ</button>`;
+        }
+
+        listEl.innerHTML += `
+            <div class="prize-item">
+                <div class="prize-info">
+                    <span class="prize-name">${prize.name}</span>
+                    <span class="prize-requirement">正解数：${prize.count}つ以上（現在：${currentCount}）</span>
+                </div>
+                <div style="display:flex; align-items:center;">${btnHtml}</div>
+            </div>
+        `;
+    });
+}
+
+// ★景品交換の個別取り消し関数
+window.undoPrize = function(id, name) {
+    if (window.confirm(`「${name}」の交換記録を取り消し、未交換に戻しますか？`)) {
+        delete exchangedPrizes[id];
+        localStorage.setItem('noda_prizes', JSON.stringify(exchangedPrizes));
+        renderPrizes();
+        alert("取り消しました。");
+    }
+};
+
+    window.claimPrize = function(id, name) {
+        if (window.confirm(`「${name}」を交換済に変更します。よろしいですか？\n（景品交換の際にスタッフに画面を見せてから押してください）`)) {
+            exchangedPrizes[id] = true;
+            localStorage.setItem('noda_prizes', JSON.stringify(exchangedPrizes));
+            renderPrizes();
+            alert(`${name} の交換を記録しました！`);
+        }
+    };
+
+    // 手動リセットボタンの処理
+    window.manualReset = function() {
+        if (window.confirm("これまでのスタンプと景品交換の記録をすべて消去します。よろしいですか？")) {
+            localStorage.clear();
+            alert("データをリセットしました。トップ画面に戻ります。");
+            location.href = location.origin + location.pathname;
+        }
+    };
+
+    function showQuiz(id) {
+        const quiz = quizData[id];
+        if (!quiz) return;
+        document.getElementById('quiz-overlay').style.display = 'block';
+        let buttons = quiz.opts.map(opt => `<button class="ans-btn" onclick="checkAnswer(${id}, '${opt[0]}')">${opt}</button>`).join('');
+        if(id == 6) buttons = `<button class="ans-btn" onclick="checkAnswer(6, '参加した！')">参加しました！</button>`;
+        document.getElementById('quiz-content').innerHTML = `<h3>問題 ${id}</h3><p>${quiz.q}</p>${buttons}`;
+    }
+
+    window.checkAnswer = function(id, choice) {
+        const quiz = quizData[id];
+        if (choice === quiz.ans || id == 6) {
+            alert("正解！スタンプをGETしました！");
+            progress[id] = true;
+            localStorage.setItem('noda_stamps', JSON.stringify(progress));
+            location.href = location.origin + location.pathname;
+        } else {
+            alert("ざんねん！もう一度考えてみてね。");
+        }
+    };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const qId = urlParams.get('q');
+    if (qId) showQuiz(qId);
+
+    renderGrid();
+    renderPrizes();
+    // --- 管理者モードの切り替え ---
+// URLに ?admin=true または &admin=true が入っている場合だけリセットボタンを表示
+if (urlParams.get('admin') === 'true') {
+    document.querySelector('.admin-section').style.display = 'block';
+}    
+</script>
+</body>
+</html>
